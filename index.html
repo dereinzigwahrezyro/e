@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>2FA | ZYRO.LOL</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+html, body {
+    margin: 0;
+    height: 100%;
+    background: #000;
+    font-family: "Courier New", monospace;
+    color: #fff;
+    overflow: hidden;
+}
+
+#enter {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #ccc;
+    cursor: pointer;
+    z-index: 9999;
+    transition: opacity .8s;
+}
+#enter.fade { opacity: 0; pointer-events: none; }
+
+#content {
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 1s;
+}
+#content.show { opacity: 1; }
+
+.container {
+    text-align: center;
+    width: 320px;
+}
+
+@keyframes rainbow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+.logo {
+    font-size: 22px;
+    margin-bottom: 30px;
+    background: linear-gradient(
+        90deg,
+        red, orange, yellow, lime, cyan, blue, violet
+    );
+    background-size: 600% 600%;
+    animation: rainbow 6s linear infinite;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+input {
+    width: 100%;
+    padding: 10px;
+    background: #111;
+    border: 1px solid #333;
+    color: #fff;
+    text-align: center;
+    font-size: 14px;
+    margin-bottom: 20px;
+}
+
+.code {
+    font-size: 36px;
+    letter-spacing: 4px;
+    margin-bottom: 10px;
+}
+
+.timer {
+    font-size: 14px;
+    color: #aaa;
+}
+</style>
+</head>
+
+<body>
+
+<div id="enter">click to enter...</div>
+
+<div id="content">
+    <div class="container">
+        <div class="logo">2FA.ZYRO.LOL</div>
+
+        <input id="secret" placeholder="Enter 16 digit key" maxlength="32">
+
+        <div class="code" id="code">------</div>
+        <div class="timer" id="timer">30s</div>
+    </div>
+</div>
+
+<script>
+const enter = document.getElementById("enter");
+const content = document.getElementById("content");
+enter.onclick = () => {
+    enter.classList.add("fade");
+    content.classList.add("show");
+};
+
+const secretInput = document.getElementById("secret");
+const codeEl = document.getElementById("code");
+const timerEl = document.getElementById("timer");
+
+function base32ToBytes(base32) {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    let bits = "";
+    let bytes = [];
+
+    base32 = base32.replace(/=+$/, "").toUpperCase();
+
+    for (let i = 0; i < base32.length; i++) {
+        const val = alphabet.indexOf(base32[i]);
+        if (val === -1) return null;
+        bits += val.toString(2).padStart(5, "0");
+    }
+
+    for (let i = 0; i + 8 <= bits.length; i += 8) {
+        bytes.push(parseInt(bits.substring(i, i + 8), 2));
+    }
+
+    return new Uint8Array(bytes);
+}
+
+async function generateTOTP(secret) {
+    const keyBytes = base32ToBytes(secret);
+    if (!keyBytes) return "------";
+
+    const epoch = Math.floor(Date.now() / 1000);
+    const counter = Math.floor(epoch / 30);
+
+    const buffer = new ArrayBuffer(8);
+    const view = new DataView(buffer);
+    view.setUint32(4, counter);
+
+    const cryptoKey = await crypto.subtle.importKey(
+        "raw",
+        keyBytes,
+        { name: "HMAC", hash: "SHA-1" },
+        false,
+        ["sign"]
+    );
+
+    const signature = await crypto.subtle.sign("HMAC", cryptoKey, buffer);
+    const hmac = new Uint8Array(signature);
+
+    const offset = hmac[hmac.length - 1] & 0xf;
+    const code =
+        ((hmac[offset] & 0x7f) << 24) |
+        ((hmac[offset + 1] & 0xff) << 16) |
+        ((hmac[offset + 2] & 0xff) << 8) |
+        (hmac[offset + 3] & 0xff);
+
+    return (code % 1000000).toString().padStart(6, "0");
+}
+
+async function update() {
+    const secret = secretInput.value.trim();
+    if (secret.length >= 16) {
+        codeEl.textContent = await generateTOTP(secret);
+    }
+
+    const seconds = 30 - Math.floor(Date.now() / 1000) % 30;
+    timerEl.textContent = seconds + "s";
+}
+
+setInterval(update, 1000);
+</script>
+
+</body>
+</html>
