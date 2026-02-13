@@ -92,6 +92,23 @@ input {
     background-size: 600% 600%;
     animation: rainbow 6s linear infinite;
 }
+
+/* COPY BUTTON */
+.copy-btn {
+    margin-top: 15px;
+    padding: 10px 25px;
+    border-radius: 20px;
+    border: none;
+    background: #333;
+    color: #fff;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background .3s, color .3s;
+}
+
+.copy-btn.success {
+    background: #00aa44;
+}
 </style>
 </head>
 
@@ -117,6 +134,8 @@ input {
 
 <div class="timer" id="timer">30s</div>
 
+<button id="copyBtn" class="copy-btn">Copy Code</button>
+
 </div>
 </div>
 
@@ -127,6 +146,7 @@ const input = document.getElementById("secret");
 const codeEl = document.getElementById("code");
 const timerEl = document.getElementById("timer");
 const bar = document.getElementById("bar");
+const copyBtn = document.getElementById("copyBtn");
 
 /* MASK AFTER 16 CHARS */
 input.addEventListener("input", () => {
@@ -194,7 +214,7 @@ async function generateTOTP(secret) {
     return (binary % 1000000).toString().padStart(6, "0");
 }
 
-/* AUTO UPDATE */
+/* UPDATE LOOP */
 async function update() {
     if (realSecret.length === 16) {
         codeEl.textContent = await generateTOTP(realSecret);
@@ -202,11 +222,26 @@ async function update() {
 
     const seconds = 30 - Math.floor(Date.now() / 1000) % 30;
     timerEl.textContent = seconds + "s";
-
     bar.style.width = (seconds / 30 * 100) + "%";
 }
 
 setInterval(update, 1000);
+
+/* COPY BUTTON */
+copyBtn.addEventListener("click", async () => {
+    const code = codeEl.textContent;
+    if (code === "------") return;
+
+    await navigator.clipboard.writeText(code);
+
+    copyBtn.textContent = "Code Copied!";
+    copyBtn.classList.add("success");
+
+    setTimeout(() => {
+        copyBtn.textContent = "Copy Code";
+        copyBtn.classList.remove("success");
+    }, 2000);
+});
 </script>
 
 </body>
