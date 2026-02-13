@@ -8,9 +8,20 @@
 <style>
 html, body {
     margin: 0;
+    height: 100%;
     background: #000;
     font-family: "Courier New", monospace;
     color: #fff;
+}
+
+.wrapper {
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.container {
     text-align: center;
 }
 
@@ -23,9 +34,8 @@ html, body {
 
 /* LOGO */
 pre {
-    margin-top: 60px;
     font-size: 16px;
-    line-height: 1.1;
+    margin-bottom: 30px;
     background: linear-gradient(
         90deg,
         red, orange, yellow, lime, cyan, blue, violet
@@ -36,14 +46,9 @@ pre {
     -webkit-text-fill-color: transparent;
 }
 
-/* CONTAINER */
-.container {
-    margin-top: 40px;
-}
-
-/* ROUND INPUT */
+/* INPUT */
 input {
-    width: 280px;
+    width: 260px;
     padding: 14px;
     border-radius: 30px;
     border: 1px solid #333;
@@ -52,38 +57,48 @@ input {
     text-align: center;
     font-size: 14px;
     outline: none;
+    margin-bottom: 20px;
 }
 
-/* BUTTON */
-button {
-    margin-top: 15px;
-    padding: 10px 25px;
-    border-radius: 20px;
-    border: none;
-    cursor: pointer;
-    background: #222;
-    color: #fff;
-    font-family: inherit;
-}
-
-button:hover {
-    background: #333;
-}
-
-/* CODE DISPLAY */
+/* CODE */
 .code {
-    margin-top: 30px;
-    font-size: 36px;
-    letter-spacing: 4px;
+    font-size: 40px;
+    letter-spacing: 6px;
+    margin-top: 20px;
 }
 
-.copy-btn {
+/* TIMER */
+.timer {
     margin-top: 10px;
+    color: #aaa;
+}
+
+.progress {
+    width: 260px;
+    height: 6px;
+    background: #111;
+    border-radius: 4px;
+    margin: 10px auto;
+    overflow: hidden;
+}
+
+.bar {
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(
+        90deg,
+        red, orange, yellow, lime, cyan, blue, violet
+    );
+    background-size: 600% 600%;
+    animation: rainbow 6s linear infinite;
 }
 </style>
 </head>
 
 <body>
+
+<div class="wrapper">
+<div class="container">
 
 <pre>
  ____  _  _  ____   __     __     __   __
@@ -92,25 +107,45 @@ button:hover {
 (____)(__/  (__\_) \__/(_)\____/ \__/ \____/
 </pre>
 
-<div class="container">
-    <input id="secret" placeholder="Enter 16 digit key">
+<input id="secret" placeholder="Enter 16 digit key" maxlength="16">
 
-    <br>
+<div class="code" id="code">------</div>
 
-    <button onclick="generate()">Generate Code</button>
+<div class="progress">
+    <div class="bar" id="bar"></div>
+</div>
 
-    <div class="code" id="code">------</div>
+<div class="timer" id="timer">30s</div>
 
-    <button class="copy-btn" onclick="copyCode()">Copy</button>
+</div>
 </div>
 
 <script>
+let realSecret = "";
+
+const input = document.getElementById("secret");
+const codeEl = document.getElementById("code");
+const timerEl = document.getElementById("timer");
+const bar = document.getElementById("bar");
+
+/* MASK AFTER 16 CHARS */
+input.addEventListener("input", () => {
+    realSecret = input.value.replace(/\s+/g,'').toUpperCase();
+
+    if (realSecret.length > 16) {
+        realSecret = realSecret.slice(0,16);
+    }
+
+    if (realSecret.length === 16) {
+        input.value = "*".repeat(16);
+    }
+});
+
+/* BASE32 */
 function base32ToBytes(base32) {
     const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
     let bits = "";
     let bytes = [];
-
-    base32 = base32.replace(/=+$/, "").toUpperCase().replace(/\s+/g,'');
 
     for (let i = 0; i < base32.length; i++) {
         const val = alphabet.indexOf(base32[i]);
@@ -125,20 +160,10 @@ function base32ToBytes(base32) {
     return new Uint8Array(bytes);
 }
 
-async function generate() {
-    const secret = document.getElementById("secret").value.trim();
-    const codeEl = document.getElementById("code");
-
-    if (secret.length < 16) {
-        codeEl.textContent = "Invalid";
-        return;
-    }
-
+/* TOTP */
+async function generateTOTP(secret) {
     const keyBytes = base32ToBytes(secret);
-    if (!keyBytes) {
-        codeEl.textContent = "Invalid";
-        return;
-    }
+    if (!keyBytes) return "------";
 
     const epoch = Math.floor(Date.now() / 1000);
     const counter = Math.floor(epoch / 30);
@@ -166,15 +191,22 @@ async function generate() {
         ((hmac[offset + 2] & 0xff) << 8) |
         (hmac[offset + 3] & 0xff);
 
-    const otp = (binary % 1000000).toString().padStart(6, "0");
-    codeEl.textContent = otp;
+    return (binary % 1000000).toString().padStart(6, "0");
 }
 
-function copyCode() {
-    const code = document.getElementById("code").textContent;
-    if (code === "------" || code === "Invalid") return;
-    navigator.clipboard.writeText(code);
+/* AUTO UPDATE */
+async function update() {
+    if (realSecret.length === 16) {
+        codeEl.textContent = await generateTOTP(realSecret);
+    }
+
+    const seconds = 30 - Math.floor(Date.now() / 1000) % 30;
+    timerEl.textContent = seconds + "s";
+
+    bar.style.width = (seconds / 30 * 100) + "%";
 }
+
+setInterval(update, 1000);
 </script>
 
 </body>
